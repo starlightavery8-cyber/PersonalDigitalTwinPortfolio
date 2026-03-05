@@ -27,10 +27,8 @@ interface Props {
 
 let chartCounter = 0;
 
-function normalizeSvg(svgHtml: string): string {
-  return svgHtml
-    .replace(/\swidth=["'][^"']*["']/gi, '')
-    .replace(/\sheight=["'][^"']*["']/gi, '');
+function svgToDataUrl(svgHtml: string): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgHtml)}`;
 }
 
 interface PanZoomProps {
@@ -48,7 +46,7 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
   const isDragging = useRef(false);
   const dragStart = useRef({ mx: 0, my: 0, px: 0, py: 0 });
 
-  const normalized = normalizeSvg(svgHtml);
+  const dataUrl = svgToDataUrl(svgHtml);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (!e.ctrlKey && !e.metaKey) return;
@@ -92,26 +90,23 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
       onMouseLeave={() => { stopDrag(); setIsHovered(false); }}
       onMouseEnter={() => setIsHovered(true)}
     >
-      <div
+      <img
+        src={dataUrl}
+        alt="diagram"
+        draggable={false}
         style={{
           position: 'absolute',
           inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
           transform: zoom !== 1 || pos.x !== 0 || pos.y !== 0
             ? `translate(${pos.x}px, ${pos.y}px) scale(${zoom})`
             : undefined,
           transformOrigin: 'center center',
           transition: isDragging.current ? 'none' : 'transform 0.1s ease-out',
         }}
-      >
-        <div
-          className="svg-contain-wrapper"
-          style={{ width: '100%', height: '100%' }}
-          dangerouslySetInnerHTML={{ __html: normalized }}
-        />
-      </div>
+      />
 
       <div className="absolute top-2 right-2 flex gap-1 z-10 pointer-events-auto">
         <button onClick={zoomIn} className="p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors" title="Zoom in">
