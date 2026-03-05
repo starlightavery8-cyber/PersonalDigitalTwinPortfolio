@@ -118,30 +118,15 @@ export default function ProjectModal({ project, onClose }: Props) {
 
               {project.logic_map?.definition && (
                 <div className="mb-10">
+                  <div className="font-mono text-xs font-bold text-[#1A1A1A]/60 mb-3 flex items-center gap-2">
+                    <span className="text-[#FF6B35]">{t('projects.logicMap')}</span>
+                  </div>
                   <Suspense fallback={
-                    <div className="w-full border-2 border-[#1A1A1A] overflow-hidden shadow-[4px_4px_0px_#1A1A1A]">
-                      <div className="flex items-center gap-2 px-4 py-2.5 bg-[#1A1A1A]">
-                        <div className="flex gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#FF6B35]" />
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#FFD60A]" />
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#00D4AA]" />
-                        </div>
-                        <span className="font-mono text-[10px] text-[#F5F0E8]/40 ml-2 tracking-widest uppercase">LOGIC MAP</span>
-                      </div>
-                      <div className="bg-[#1A1A1A] flex items-center justify-center h-48 gap-3">
-                        <div className="flex gap-1">
-                          {[0,1,2].map(i => (
-                            <span key={i} className="w-1.5 h-1.5 bg-[#FFD60A] rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-                          ))}
-                        </div>
-                        <span className="font-mono text-xs text-[#F5F0E8]/30 tracking-widest">LOADING</span>
-                      </div>
+                    <div className="h-48 border-2 border-[#1A1A1A] bg-[#F5F0E8] flex items-center justify-center font-mono text-sm text-[#1A1A1A]/40">
+                      {t('projects.loadingDiagram')}
                     </div>
                   }>
-                    <MermaidChart
-                      definition={project.logic_map.definition}
-                      title={`${(locale === 'zh' && project.translations?.zh?.title) || project.title} — WORKFLOW`}
-                    />
+                    <MermaidChart definition={project.logic_map.definition} />
                   </Suspense>
                 </div>
               )}
