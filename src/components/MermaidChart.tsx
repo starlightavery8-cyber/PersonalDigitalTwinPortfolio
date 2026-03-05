@@ -68,10 +68,10 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
     if (!svgHtml || cw <= 0) return;
     const ch = containerHeight;
     const dims = getSvgDims(svgHtml);
-    const padding = 24;
+    const padding = 32;
     const scaleX = (cw - padding) / dims.w;
     const scaleY = (ch - padding) / dims.h;
-    const fit = Math.min(scaleX, scaleY, 2);
+    const fit = Math.min(scaleX, scaleY);
     setFitScale(fit);
     setScale(fit);
     setPos({ x: 0, y: 0 });
@@ -80,22 +80,17 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
   useEffect(() => {
     if (!wrapperRef.current || !svgHtml) return;
     const el = wrapperRef.current;
-    let ro: ResizeObserver | null = null;
 
-    const raf = requestAnimationFrame(() => {
-      const cw = el.getBoundingClientRect().width || el.clientWidth;
-      if (cw > 0) {
-        computeFit(cw);
-        return;
-      }
-      ro = new ResizeObserver((entries) => {
-        const w = entries[0]?.contentRect.width ?? 0;
-        if (w > 0) { ro?.disconnect(); ro = null; computeFit(w); }
-      });
-      ro.observe(el);
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      if (w > 0) computeFit(w);
     });
+    ro.observe(el);
 
-    return () => { cancelAnimationFrame(raf); ro?.disconnect(); };
+    const cw = el.getBoundingClientRect().width || el.clientWidth;
+    if (cw > 0) computeFit(cw);
+
+    return () => ro.disconnect();
   }, [svgHtml, containerHeight, computeFit]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
