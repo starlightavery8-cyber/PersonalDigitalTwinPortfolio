@@ -116,13 +116,13 @@ export default function ProjectModal({ project, onClose }: Props) {
                 ) : null;
               })()}
 
-              {project.logic_map && (
+              {project.logic_map?.definition && (
                 <div className="mb-10">
                   <div className="font-mono text-xs font-bold text-[#1A1A1A]/60 mb-3 flex items-center gap-2">
                     <span className="text-[#FF6B35]">{t('projects.logicMap')}</span>
                   </div>
                   <Suspense fallback={
-                    <div className="h-40 border-2 border-[#1A1A1A] bg-[#F5F0E8] flex items-center justify-center font-mono text-sm text-[#1A1A1A]/40">
+                    <div className="h-48 border-2 border-[#1A1A1A] bg-[#F5F0E8] flex items-center justify-center font-mono text-sm text-[#1A1A1A]/40">
                       {t('projects.loadingDiagram')}
                     </div>
                   }>
