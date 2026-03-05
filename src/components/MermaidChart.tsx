@@ -27,25 +27,10 @@ interface Props {
 
 let chartCounter = 0;
 
-interface SvgDims {
-  w: number;
-  h: number;
-}
-
-function getSvgDims(svgHtml: string): SvgDims {
-  const vbMatch = svgHtml.match(/viewBox=["']([^"']+)["']/i);
-  if (vbMatch) {
-    const parts = vbMatch[1].trim().split(/[\s,]+/).map(Number);
-    if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
-      return { w: parts[2], h: parts[3] };
-    }
-  }
-  const wMatch = svgHtml.match(/<svg[^>]+\swidth=["']([0-9.]+)["']/i);
-  const hMatch = svgHtml.match(/<svg[^>]+\sheight=["']([0-9.]+)["']/i);
-  const sw = wMatch ? parseFloat(wMatch[1]) : 0;
-  const sh = hMatch ? parseFloat(hMatch[1]) : 0;
-  if (sw > 0 && sh > 0) return { w: sw, h: sh };
-  return { w: 800, h: 400 };
+function normalizeSvg(svgHtml: string): string {
+  return svgHtml
+    .replace(/\swidth=["'][^"']*["']/gi, ' width="100%"')
+    .replace(/\sheight=["'][^"']*["']/gi, ' height="100%"');
 }
 
 interface PanZoomProps {
@@ -55,49 +40,21 @@ interface PanZoomProps {
 
 function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [zoom, setZoom] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
-  const [fitScale, setFitScale] = useState(1);
   const [isHovered, setIsHovered] = useState(false);
   const [ctrlZooming, setCtrlZooming] = useState(false);
   const ctrlZoomTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDragging = useRef(false);
   const dragStart = useRef({ mx: 0, my: 0, px: 0, py: 0 });
 
-  const computeFit = useCallback((cw: number) => {
-    if (!svgHtml || cw <= 0) return;
-    const ch = containerHeight;
-    const dims = getSvgDims(svgHtml);
-    const padding = 32;
-    const scaleX = (cw - padding) / dims.w;
-    const scaleY = (ch - padding) / dims.h;
-    const fit = Math.min(scaleX, scaleY);
-    setFitScale(fit);
-    setScale(fit);
-    setPos({ x: 0, y: 0 });
-  }, [svgHtml, containerHeight]);
-
-  useEffect(() => {
-    if (!wrapperRef.current || !svgHtml) return;
-    const el = wrapperRef.current;
-
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? 0;
-      if (w > 0) computeFit(w);
-    });
-    ro.observe(el);
-
-    const cw = el.getBoundingClientRect().width || el.clientWidth;
-    if (cw > 0) computeFit(cw);
-
-    return () => ro.disconnect();
-  }, [svgHtml, containerHeight, computeFit]);
+  const normalized = normalizeSvg(svgHtml);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
     const factor = e.deltaY > 0 ? 0.9 : 1.1;
-    setScale((s) => Math.min(Math.max(s * factor, 0.1), 5));
+    setZoom((s) => Math.min(Math.max(s * factor, 0.1), 5));
     setCtrlZooming(true);
     if (ctrlZoomTimer.current) clearTimeout(ctrlZoomTimer.current);
     ctrlZoomTimer.current = setTimeout(() => setCtrlZooming(false), 1000);
@@ -119,9 +76,9 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
 
   const stopDrag = useCallback(() => { isDragging.current = false; }, []);
 
-  const zoomIn = (e: React.MouseEvent) => { e.stopPropagation(); setScale((s) => Math.min(s * 1.25, 5)); };
-  const zoomOut = (e: React.MouseEvent) => { e.stopPropagation(); setScale((s) => Math.max(s * 0.8, 0.1)); };
-  const reset = (e: React.MouseEvent) => { e.stopPropagation(); setScale(fitScale); setPos({ x: 0, y: 0 }); };
+  const zoomIn = (e: React.MouseEvent) => { e.stopPropagation(); setZoom((s) => Math.min(s * 1.25, 5)); };
+  const zoomOut = (e: React.MouseEvent) => { e.stopPropagation(); setZoom((s) => Math.max(s * 0.8, 0.1)); };
+  const reset = (e: React.MouseEvent) => { e.stopPropagation(); setZoom(1); setPos({ x: 0, y: 0 }); };
 
   return (
     <div
@@ -138,13 +95,17 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
       <div
         style={{
           position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px)) scale(${scale})`,
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transform: zoom !== 1 || pos.x !== 0 || pos.y !== 0
+            ? `translate(${pos.x}px, ${pos.y}px) scale(${zoom})`
+            : undefined,
           transformOrigin: 'center center',
           transition: isDragging.current ? 'none' : 'transform 0.1s ease-out',
         }}
-        dangerouslySetInnerHTML={{ __html: svgHtml }}
+        dangerouslySetInnerHTML={{ __html: normalized }}
       />
 
       <div className="absolute top-2 right-2 flex gap-1 z-10 pointer-events-auto">
@@ -169,7 +130,7 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
       </div>
 
       <div className="absolute bottom-2 left-2 font-mono text-[10px] text-[#1A1A1A]/30 pointer-events-none">
-        {Math.round(scale * 100)}% · drag to pan
+        {Math.round(zoom * 100)}% · drag to pan
       </div>
     </div>
   );
