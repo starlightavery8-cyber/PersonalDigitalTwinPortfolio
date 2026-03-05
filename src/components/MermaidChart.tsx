@@ -29,8 +29,8 @@ let chartCounter = 0;
 
 function normalizeSvg(svgHtml: string): string {
   return svgHtml
-    .replace(/\swidth=["'][^"']*["']/gi, ' width="100%"')
-    .replace(/\sheight=["'][^"']*["']/gi, ' height="100%"');
+    .replace(/\swidth=["'][^"']*["']/gi, '')
+    .replace(/\sheight=["'][^"']*["']/gi, '');
 }
 
 interface PanZoomProps {
@@ -105,8 +105,13 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
           transformOrigin: 'center center',
           transition: isDragging.current ? 'none' : 'transform 0.1s ease-out',
         }}
-        dangerouslySetInnerHTML={{ __html: normalized }}
-      />
+      >
+        <div
+          className="svg-contain-wrapper"
+          style={{ width: '100%', height: '100%' }}
+          dangerouslySetInnerHTML={{ __html: normalized }}
+        />
+      </div>
 
       <div className="absolute top-2 right-2 flex gap-1 z-10 pointer-events-auto">
         <button onClick={zoomIn} className="p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors" title="Zoom in">
