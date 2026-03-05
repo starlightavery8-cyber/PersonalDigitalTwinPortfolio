@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import mermaid from 'mermaid';
-import { ZoomIn, ZoomOut, Maximize2, RotateCcw } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, RotateCcw, X } from 'lucide-react';
 
 mermaid.initialize({
   startOnLoad: false,
@@ -27,42 +27,101 @@ interface Props {
 
 let chartCounter = 0;
 
-interface Transform {
-  scale: number;
-  x: number;
-  y: number;
+interface PanZoomProps {
+  svgHtml: string;
+}
+
+function PanZoomView({ svgHtml }: PanZoomProps) {
+  const [scale, setScale] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const isDragging = useRef(false);
+  const dragStart = useRef({ mx: 0, my: 0, px: 0, py: 0 });
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 0.9 : 1.1;
+    setScale((s) => Math.min(Math.max(s * factor, 0.3), 5));
+  }, []);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    isDragging.current = true;
+    dragStart.current = { mx: e.clientX, my: e.clientY, px: pos.x, py: pos.y };
+  }, [pos]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging.current) return;
+    setPos({
+      x: dragStart.current.px + (e.clientX - dragStart.current.mx),
+      y: dragStart.current.py + (e.clientY - dragStart.current.my),
+    });
+  }, []);
+
+  const stopDrag = useCallback(() => { isDragging.current = false; }, []);
+
+  const zoomIn = (e: React.MouseEvent) => { e.stopPropagation(); setScale((s) => Math.min(s * 1.25, 5)); };
+  const zoomOut = (e: React.MouseEvent) => { e.stopPropagation(); setScale((s) => Math.max(s * 0.8, 0.3)); };
+  const reset = (e: React.MouseEvent) => { e.stopPropagation(); setScale(1); setPos({ x: 0, y: 0 }); };
+
+  return (
+    <div
+      className="relative select-none overflow-hidden min-h-[140px]"
+      style={{ cursor: isDragging.current ? 'grabbing' : 'grab' }}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={stopDrag}
+      onMouseLeave={stopDrag}
+    >
+      <div
+        style={{
+          transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`,
+          transformOrigin: 'center center',
+          transition: isDragging.current ? 'none' : 'transform 0.1s ease-out',
+        }}
+        dangerouslySetInnerHTML={{ __html: svgHtml }}
+      />
+
+      <div className="absolute top-2 right-2 flex gap-1 z-10 pointer-events-auto">
+        <button onClick={zoomIn} className="p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors" title="Zoom in">
+          <ZoomIn size={13} strokeWidth={2.5} />
+        </button>
+        <button onClick={zoomOut} className="p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors" title="Zoom out">
+          <ZoomOut size={13} strokeWidth={2.5} />
+        </button>
+        <button onClick={reset} className="p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors" title="Reset view">
+          <RotateCcw size={13} strokeWidth={2.5} />
+        </button>
+      </div>
+
+      <div className="absolute bottom-2 left-2 font-mono text-[10px] text-[#1A1A1A]/30 pointer-events-none">
+        {Math.round(scale * 100)}% · scroll to zoom · drag to pan
+      </div>
+    </div>
+  );
 }
 
 export default function MermaidChart({ definition }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const svgWrapRef = useRef<HTMLDivElement>(null);
+  const [svgHtml, setSvgHtml] = useState('');
   const [error, setError] = useState(false);
-  const [transform, setTransform] = useState<Transform>({ scale: 1, x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStart = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    if (!containerRef.current || !definition?.trim()) return;
-
+    if (!definition?.trim()) return;
     let cancelled = false;
 
     const render = async () => {
       const id = `mermaid-chart-${++chartCounter}`;
       try {
         const { svg } = await mermaid.render(id, definition.trim());
-        if (cancelled || !containerRef.current) return;
-        containerRef.current.innerHTML = svg;
-        const svgEl = containerRef.current.querySelector('svg');
-        if (svgEl) {
-          svgEl.style.maxWidth = 'none';
-          svgEl.style.width = '100%';
-          svgEl.style.height = 'auto';
-          svgEl.removeAttribute('width');
-          svgEl.removeAttribute('height');
-        }
+        if (cancelled) return;
+        const patched = svg
+          .replace(/width="[^"]*"/, 'width="100%"')
+          .replace(/height="[^"]*"/, 'height="auto"')
+          .replace(/style="max-width:[^"]*"/, '');
+        setSvgHtml(patched);
         setError(false);
-        setTransform({ scale: 1, x: 0, y: 0 });
       } catch (err) {
         if (!cancelled) {
           console.warn('Mermaid render error:', err);
@@ -72,46 +131,8 @@ export default function MermaidChart({ definition }: Props) {
     };
 
     const timer = setTimeout(render, 50);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [definition]);
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setTransform((prev) => ({
-      ...prev,
-      scale: Math.min(Math.max(prev.scale * delta, 0.3), 5),
-    }));
-  }, []);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    setIsDragging(true);
-    dragStart.current = { x: e.clientX, y: e.clientY, tx: transform.x, ty: transform.y };
-  }, [transform]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isDragging || !dragStart.current) return;
-    const dx = e.clientX - dragStart.current.x;
-    const dy = e.clientY - dragStart.current.y;
-    setTransform((prev) => ({
-      ...prev,
-      x: dragStart.current!.tx + dx,
-      y: dragStart.current!.ty + dy,
-    }));
-  }, [isDragging]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-    dragStart.current = null;
-  }, []);
-
-  const zoomIn = () => setTransform((p) => ({ ...p, scale: Math.min(p.scale * 1.25, 5) }));
-  const zoomOut = () => setTransform((p) => ({ ...p, scale: Math.max(p.scale * 0.8, 0.3) }));
-  const reset = () => setTransform({ scale: 1, x: 0, y: 0 });
 
   if (error) {
     return (
@@ -121,90 +142,48 @@ export default function MermaidChart({ definition }: Props) {
     );
   }
 
-  const content = (
-    <div
-      className="relative select-none"
-      style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
-      onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-    >
-      <div
-        ref={svgWrapRef}
-        style={{
-          transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
-          transformOrigin: 'center center',
-          transition: isDragging ? 'none' : 'transform 0.1s ease-out',
-        }}
-      >
-        <div ref={containerRef} className="min-h-[120px]" />
+  if (!svgHtml) {
+    return (
+      <div ref={containerRef} className="w-full border-2 border-[#1A1A1A] bg-[#F5F0E8] p-6 font-mono text-xs text-[#1A1A1A]/40 text-center min-h-[120px] flex items-center justify-center">
+        Loading diagram...
       </div>
+    );
+  }
 
-      <div className="absolute top-2 right-2 flex gap-1 z-10">
+  return (
+    <>
+      <div className="w-full bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 relative">
+        <PanZoomView svgHtml={svgHtml} />
         <button
-          onClick={(e) => { e.stopPropagation(); zoomIn(); }}
-          className="p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors"
-          title="Zoom in"
-        >
-          <ZoomIn size={13} strokeWidth={2.5} />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); zoomOut(); }}
-          className="p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors"
-          title="Zoom out"
-        >
-          <ZoomOut size={13} strokeWidth={2.5} />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); reset(); }}
-          className="p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors"
-          title="Reset"
-        >
-          <RotateCcw size={13} strokeWidth={2.5} />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); setIsFullscreen(true); }}
-          className="p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors"
+          onClick={() => setIsFullscreen(true)}
+          className="absolute top-2 right-[116px] p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors z-10"
           title="Fullscreen"
         >
           <Maximize2 size={13} strokeWidth={2.5} />
         </button>
       </div>
 
-      <div className="absolute bottom-2 left-2 font-mono text-[10px] text-[#1A1A1A]/30 pointer-events-none">
-        {Math.round(transform.scale * 100)}% · scroll to zoom · drag to pan
-      </div>
-    </div>
-  );
-
-  return (
-    <>
-      <div className="mermaid-container w-full overflow-hidden bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 min-h-[160px]">
-        {content}
-      </div>
-
       {isFullscreen && (
         <div
-          className="fixed inset-0 z-[200] bg-[#1A1A1A]/80 backdrop-blur-sm flex items-center justify-center p-8"
+          className="fixed inset-0 z-[200] bg-[#1A1A1A]/80 backdrop-blur-sm flex items-center justify-center p-6"
           onClick={() => setIsFullscreen(false)}
         >
           <div
-            className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-[8px_8px_0px_#FF6B35] w-full max-w-5xl max-h-[90vh] overflow-hidden"
+            className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-[8px_8px_0px_#FF6B35] w-full max-w-5xl"
+            style={{ maxHeight: '90vh' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-2 border-b-2 border-[#1A1A1A] bg-[#1A1A1A]">
               <span className="font-mono text-xs font-bold text-[#FF6B35]">LOGIC MAP</span>
               <button
                 onClick={() => setIsFullscreen(false)}
-                className="font-mono text-xs text-[#F5F0E8]/60 hover:text-[#F5F0E8] transition-colors px-2 py-1 border border-[#F5F0E8]/20 hover:border-[#FF6B35]"
+                className="p-1.5 border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors"
               >
-                ESC / CLOSE
+                <X size={14} strokeWidth={2.5} />
               </button>
             </div>
-            <div className="p-6 overflow-hidden">
-              {content}
+            <div className="p-4" style={{ height: 'calc(90vh - 48px)' }}>
+              <PanZoomView svgHtml={svgHtml} />
             </div>
           </div>
         </div>
