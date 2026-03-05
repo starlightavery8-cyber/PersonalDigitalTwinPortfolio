@@ -58,9 +58,10 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
   const isDragging = useRef(false);
   const dragStart = useRef({ mx: 0, my: 0, px: 0, py: 0 });
 
-  useEffect(() => {
+  const computeFit = useCallback(() => {
     if (!wrapperRef.current || !svgHtml) return;
-    const cw = wrapperRef.current.clientWidth || 600;
+    const cw = wrapperRef.current.clientWidth;
+    if (!cw) return;
     const ch = containerHeight;
 
     const probe = document.createElement('div');
@@ -80,6 +81,24 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
     setScale(fit);
     setPos({ x: 0, y: 0 });
   }, [svgHtml, containerHeight]);
+
+  useEffect(() => {
+    if (!wrapperRef.current || !svgHtml) return;
+
+    if (wrapperRef.current.clientWidth > 0) {
+      computeFit();
+      return;
+    }
+
+    const ro = new ResizeObserver((entries) => {
+      if (entries[0]?.contentRect.width > 0) {
+        ro.disconnect();
+        computeFit();
+      }
+    });
+    ro.observe(wrapperRef.current);
+    return () => ro.disconnect();
+  }, [svgHtml, containerHeight, computeFit]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (!e.ctrlKey && !e.metaKey) return;
