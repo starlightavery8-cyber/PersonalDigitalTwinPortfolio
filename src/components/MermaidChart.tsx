@@ -27,20 +27,49 @@ interface Props {
 
 let chartCounter = 0;
 
-interface PanZoomProps {
-  svgHtml: string;
+interface SvgDims {
+  w: number;
+  h: number;
 }
 
-function PanZoomView({ svgHtml }: PanZoomProps) {
+function parseSvgDims(html: string): SvgDims {
+  const match = html.match(/viewBox="[^"]*?\s+[^"]*?\s+([0-9.]+)\s+([0-9.]+)"/);
+  if (match) return { w: parseFloat(match[1]), h: parseFloat(match[2]) };
+  const wm = html.match(/width="([0-9.]+)"/);
+  const hm = html.match(/height="([0-9.]+)"/);
+  return { w: wm ? parseFloat(wm[1]) : 800, h: hm ? parseFloat(hm[1]) : 400 };
+}
+
+interface PanZoomProps {
+  svgHtml: string;
+  containerHeight?: number;
+}
+
+function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [fitScale, setFitScale] = useState(1);
   const isDragging = useRef(false);
   const dragStart = useRef({ mx: 0, my: 0, px: 0, py: 0 });
+
+  useEffect(() => {
+    if (!wrapperRef.current || !svgHtml) return;
+    const cw = wrapperRef.current.clientWidth || 600;
+    const ch = containerHeight;
+    const dims = parseSvgDims(svgHtml);
+    const scaleX = (cw - 32) / dims.w;
+    const scaleY = (ch - 32) / dims.h;
+    const fit = Math.min(scaleX, scaleY, 1);
+    setFitScale(fit);
+    setScale(fit);
+    setPos({ x: 0, y: 0 });
+  }, [svgHtml, containerHeight]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     const factor = e.deltaY > 0 ? 0.9 : 1.1;
-    setScale((s) => Math.min(Math.max(s * factor, 0.3), 5));
+    setScale((s) => Math.min(Math.max(s * factor, 0.1), 5));
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -60,13 +89,14 @@ function PanZoomView({ svgHtml }: PanZoomProps) {
   const stopDrag = useCallback(() => { isDragging.current = false; }, []);
 
   const zoomIn = (e: React.MouseEvent) => { e.stopPropagation(); setScale((s) => Math.min(s * 1.25, 5)); };
-  const zoomOut = (e: React.MouseEvent) => { e.stopPropagation(); setScale((s) => Math.max(s * 0.8, 0.3)); };
-  const reset = (e: React.MouseEvent) => { e.stopPropagation(); setScale(1); setPos({ x: 0, y: 0 }); };
+  const zoomOut = (e: React.MouseEvent) => { e.stopPropagation(); setScale((s) => Math.max(s * 0.8, 0.1)); };
+  const reset = (e: React.MouseEvent) => { e.stopPropagation(); setScale(fitScale); setPos({ x: 0, y: 0 }); };
 
   return (
     <div
-      className="relative select-none overflow-hidden min-h-[140px]"
-      style={{ cursor: isDragging.current ? 'grabbing' : 'grab' }}
+      ref={wrapperRef}
+      className="relative select-none overflow-hidden w-full"
+      style={{ height: containerHeight, cursor: isDragging.current ? 'grabbing' : 'grab' }}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -75,7 +105,10 @@ function PanZoomView({ svgHtml }: PanZoomProps) {
     >
       <div
         style={{
-          transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`,
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px)) scale(${scale})`,
           transformOrigin: 'center center',
           transition: isDragging.current ? 'none' : 'transform 0.1s ease-out',
         }}
@@ -89,7 +122,7 @@ function PanZoomView({ svgHtml }: PanZoomProps) {
         <button onClick={zoomOut} className="p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors" title="Zoom out">
           <ZoomOut size={13} strokeWidth={2.5} />
         </button>
-        <button onClick={reset} className="p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors" title="Reset view">
+        <button onClick={reset} className="p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors" title="Fit to view">
           <RotateCcw size={13} strokeWidth={2.5} />
         </button>
       </div>
@@ -102,7 +135,6 @@ function PanZoomView({ svgHtml }: PanZoomProps) {
 }
 
 export default function MermaidChart({ definition }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [svgHtml, setSvgHtml] = useState('');
   const [error, setError] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -116,11 +148,7 @@ export default function MermaidChart({ definition }: Props) {
       try {
         const { svg } = await mermaid.render(id, definition.trim());
         if (cancelled) return;
-        const patched = svg
-          .replace(/width="[^"]*"/, 'width="100%"')
-          .replace(/height="[^"]*"/, 'height="auto"')
-          .replace(/style="max-width:[^"]*"/, '');
-        setSvgHtml(patched);
+        setSvgHtml(svg);
         setError(false);
       } catch (err) {
         if (!cancelled) {
@@ -144,7 +172,7 @@ export default function MermaidChart({ definition }: Props) {
 
   if (!svgHtml) {
     return (
-      <div ref={containerRef} className="w-full border-2 border-[#1A1A1A] bg-[#F5F0E8] p-6 font-mono text-xs text-[#1A1A1A]/40 text-center min-h-[120px] flex items-center justify-center">
+      <div className="w-full border-2 border-[#1A1A1A] bg-[#F5F0E8] p-6 font-mono text-xs text-[#1A1A1A]/40 text-center min-h-[120px] flex items-center justify-center">
         Loading diagram...
       </div>
     );
@@ -152,8 +180,8 @@ export default function MermaidChart({ definition }: Props) {
 
   return (
     <>
-      <div className="w-full bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 relative">
-        <PanZoomView svgHtml={svgHtml} />
+      <div className="w-full bg-[#F5F0E8] border-2 border-[#1A1A1A] relative">
+        <PanZoomView svgHtml={svgHtml} containerHeight={260} />
         <button
           onClick={() => setIsFullscreen(true)}
           className="absolute top-2 right-[116px] p-1.5 bg-[#1A1A1A] border border-[#F5F0E8]/20 text-[#F5F0E8] hover:bg-[#FF6B35] transition-colors z-10"
@@ -182,8 +210,8 @@ export default function MermaidChart({ definition }: Props) {
                 <X size={14} strokeWidth={2.5} />
               </button>
             </div>
-            <div className="p-4" style={{ height: 'calc(90vh - 48px)' }}>
-              <PanZoomView svgHtml={svgHtml} />
+            <div style={{ height: 'calc(90vh - 48px)' }}>
+              <PanZoomView svgHtml={svgHtml} containerHeight={window.innerHeight * 0.9 - 48} />
             </div>
           </div>
         </div>
