@@ -50,6 +50,9 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
   const [scale, setScale] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [fitScale, setFitScale] = useState(1);
+  const [isHovered, setIsHovered] = useState(false);
+  const [ctrlZooming, setCtrlZooming] = useState(false);
+  const ctrlZoomTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDragging = useRef(false);
   const dragStart = useRef({ mx: 0, my: 0, px: 0, py: 0 });
 
@@ -67,9 +70,13 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
   }, [svgHtml, containerHeight]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
     const factor = e.deltaY > 0 ? 0.9 : 1.1;
     setScale((s) => Math.min(Math.max(s * factor, 0.1), 5));
+    setCtrlZooming(true);
+    if (ctrlZoomTimer.current) clearTimeout(ctrlZoomTimer.current);
+    ctrlZoomTimer.current = setTimeout(() => setCtrlZooming(false), 1000);
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -101,7 +108,8 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={stopDrag}
-      onMouseLeave={stopDrag}
+      onMouseLeave={() => { stopDrag(); setIsHovered(false); }}
+      onMouseEnter={() => setIsHovered(true)}
     >
       <div
         style={{
@@ -127,8 +135,17 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
         </button>
       </div>
 
+      <div
+        className="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300"
+        style={{ opacity: isHovered && !ctrlZooming ? 1 : 0 }}
+      >
+        <span className="font-mono text-[10px] text-[#1A1A1A]/50 bg-[#F5F0E8]/80 px-2 py-1 border border-[#1A1A1A]/20">
+          Ctrl + scroll to zoom
+        </span>
+      </div>
+
       <div className="absolute bottom-2 left-2 font-mono text-[10px] text-[#1A1A1A]/30 pointer-events-none">
-        {Math.round(scale * 100)}% · scroll to zoom · drag to pan
+        {Math.round(scale * 100)}% · drag to pan
       </div>
     </div>
   );
