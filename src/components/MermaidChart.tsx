@@ -63,7 +63,7 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
     const dims = parseSvgDims(svgHtml);
     const scaleX = (cw - 32) / dims.w;
     const scaleY = (ch - 32) / dims.h;
-    const fit = Math.min(scaleX, scaleY);
+    const fit = Math.min(scaleX, scaleY) * 1.6;
     setFitScale(fit);
     setScale(fit);
     setPos({ x: 0, y: 0 });
