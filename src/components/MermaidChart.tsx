@@ -32,12 +32,14 @@ interface SvgDims {
   h: number;
 }
 
-function parseSvgDims(html: string): SvgDims {
-  const match = html.match(/viewBox="[^"]*?\s+[^"]*?\s+([0-9.]+)\s+([0-9.]+)"/);
-  if (match) return { w: parseFloat(match[1]), h: parseFloat(match[2]) };
-  const wm = html.match(/width="([0-9.]+)"/);
-  const hm = html.match(/height="([0-9.]+)"/);
-  return { w: wm ? parseFloat(wm[1]) : 800, h: hm ? parseFloat(hm[1]) : 400 };
+function getContentBBox(svgEl: SVGSVGElement): SvgDims {
+  try {
+    const bbox = svgEl.getBBox();
+    if (bbox.width > 0 && bbox.height > 0) return { w: bbox.width, h: bbox.height };
+  } catch (_) {}
+  const vb = svgEl.viewBox?.baseVal;
+  if (vb && vb.width > 0 && vb.height > 0) return { w: vb.width, h: vb.height };
+  return { w: svgEl.clientWidth || 800, h: svgEl.clientHeight || 400 };
 }
 
 interface PanZoomProps {
@@ -60,10 +62,20 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
     if (!wrapperRef.current || !svgHtml) return;
     const cw = wrapperRef.current.clientWidth || 600;
     const ch = containerHeight;
-    const dims = parseSvgDims(svgHtml);
-    const scaleX = (cw - 32) / dims.w;
-    const scaleY = (ch - 32) / dims.h;
-    const fit = Math.min(scaleX, scaleY) * 1.6;
+
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;top:-9999px;left:-9999px';
+    probe.innerHTML = svgHtml;
+    document.body.appendChild(probe);
+    const svgEl = probe.querySelector('svg');
+    let dims: SvgDims = { w: 800, h: 400 };
+    if (svgEl) dims = getContentBBox(svgEl as SVGSVGElement);
+    document.body.removeChild(probe);
+
+    const padding = 24;
+    const scaleX = (cw - padding) / dims.w;
+    const scaleY = (ch - padding) / dims.h;
+    const fit = Math.min(scaleX, scaleY);
     setFitScale(fit);
     setScale(fit);
     setPos({ x: 0, y: 0 });
