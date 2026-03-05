@@ -32,21 +32,20 @@ interface SvgDims {
   h: number;
 }
 
-function getContentBBox(svgEl: SVGSVGElement, svgHtml: string): SvgDims {
-  const vbMatch = svgHtml.match(/viewBox=["']([^"']+)["']/);
+function getSvgDims(svgHtml: string): SvgDims {
+  const vbMatch = svgHtml.match(/viewBox=["']([^"']+)["']/i);
   if (vbMatch) {
     const parts = vbMatch[1].trim().split(/[\s,]+/).map(Number);
     if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
       return { w: parts[2], h: parts[3] };
     }
   }
-  const vb = svgEl.viewBox?.baseVal;
-  if (vb && vb.width > 0 && vb.height > 0) return { w: vb.width, h: vb.height };
-  try {
-    const bbox = svgEl.getBBox();
-    if (bbox.width > 0 && bbox.height > 0) return { w: bbox.width, h: bbox.height };
-  } catch (_) {}
-  return { w: svgEl.clientWidth || 800, h: svgEl.clientHeight || 400 };
+  const wMatch = svgHtml.match(/<svg[^>]+\swidth=["']([0-9.]+)["']/i);
+  const hMatch = svgHtml.match(/<svg[^>]+\sheight=["']([0-9.]+)["']/i);
+  const sw = wMatch ? parseFloat(wMatch[1]) : 0;
+  const sh = hMatch ? parseFloat(hMatch[1]) : 0;
+  if (sw > 0 && sh > 0) return { w: sw, h: sh };
+  return { w: 800, h: 400 };
 }
 
 interface PanZoomProps {
@@ -65,25 +64,14 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
   const isDragging = useRef(false);
   const dragStart = useRef({ mx: 0, my: 0, px: 0, py: 0 });
 
-  const computeFit = useCallback(() => {
-    if (!wrapperRef.current || !svgHtml) return;
-    const cw = wrapperRef.current.clientWidth;
-    if (!cw) return;
+  const computeFit = useCallback((cw: number) => {
+    if (!svgHtml || cw <= 0) return;
     const ch = containerHeight;
-
-    const probe = document.createElement('div');
-    probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;top:-9999px;left:-9999px';
-    probe.innerHTML = svgHtml;
-    document.body.appendChild(probe);
-    const svgEl = probe.querySelector('svg');
-    let dims: SvgDims = { w: 800, h: 400 };
-    if (svgEl) dims = getContentBBox(svgEl as SVGSVGElement, svgHtml);
-    document.body.removeChild(probe);
-
+    const dims = getSvgDims(svgHtml);
     const padding = 24;
     const scaleX = (cw - padding) / dims.w;
     const scaleY = (ch - padding) / dims.h;
-    const fit = Math.min(scaleX, scaleY);
+    const fit = Math.min(scaleX, scaleY, 2);
     setFitScale(fit);
     setScale(fit);
     setPos({ x: 0, y: 0 });
@@ -91,20 +79,23 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
 
   useEffect(() => {
     if (!wrapperRef.current || !svgHtml) return;
+    const el = wrapperRef.current;
+    let ro: ResizeObserver | null = null;
 
-    if (wrapperRef.current.clientWidth > 0) {
-      computeFit();
-      return;
-    }
-
-    const ro = new ResizeObserver((entries) => {
-      if (entries[0]?.contentRect.width > 0) {
-        ro.disconnect();
-        computeFit();
+    const raf = requestAnimationFrame(() => {
+      const cw = el.getBoundingClientRect().width || el.clientWidth;
+      if (cw > 0) {
+        computeFit(cw);
+        return;
       }
+      ro = new ResizeObserver((entries) => {
+        const w = entries[0]?.contentRect.width ?? 0;
+        if (w > 0) { ro?.disconnect(); ro = null; computeFit(w); }
+      });
+      ro.observe(el);
     });
-    ro.observe(wrapperRef.current);
-    return () => ro.disconnect();
+
+    return () => { cancelAnimationFrame(raf); ro?.disconnect(); };
   }, [svgHtml, containerHeight, computeFit]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
