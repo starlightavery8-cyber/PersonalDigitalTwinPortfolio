@@ -32,13 +32,20 @@ interface SvgDims {
   h: number;
 }
 
-function getContentBBox(svgEl: SVGSVGElement): SvgDims {
+function getContentBBox(svgEl: SVGSVGElement, svgHtml: string): SvgDims {
+  const vbMatch = svgHtml.match(/viewBox=["']([^"']+)["']/);
+  if (vbMatch) {
+    const parts = vbMatch[1].trim().split(/[\s,]+/).map(Number);
+    if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+      return { w: parts[2], h: parts[3] };
+    }
+  }
+  const vb = svgEl.viewBox?.baseVal;
+  if (vb && vb.width > 0 && vb.height > 0) return { w: vb.width, h: vb.height };
   try {
     const bbox = svgEl.getBBox();
     if (bbox.width > 0 && bbox.height > 0) return { w: bbox.width, h: bbox.height };
   } catch (_) {}
-  const vb = svgEl.viewBox?.baseVal;
-  if (vb && vb.width > 0 && vb.height > 0) return { w: vb.width, h: vb.height };
   return { w: svgEl.clientWidth || 800, h: svgEl.clientHeight || 400 };
 }
 
@@ -70,7 +77,7 @@ function PanZoomView({ svgHtml, containerHeight = 260 }: PanZoomProps) {
     document.body.appendChild(probe);
     const svgEl = probe.querySelector('svg');
     let dims: SvgDims = { w: 800, h: 400 };
-    if (svgEl) dims = getContentBBox(svgEl as SVGSVGElement);
+    if (svgEl) dims = getContentBBox(svgEl as SVGSVGElement, svgHtml);
     document.body.removeChild(probe);
 
     const padding = 24;
