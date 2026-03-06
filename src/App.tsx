@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from 'react';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { DevModeProvider } from './contexts/DevModeContext';
 import { useTranslation } from './hooks/useTranslation';
 import Navigation from './components/Navigation';
 import Hero from './components/Hero';
@@ -13,6 +14,7 @@ import FloatingChat from './components/FloatingChat';
 import type { Project } from './lib/types';
 
 const SkillsSection = lazy(() => import('./components/SkillsSection'));
+const DevPanel = lazy(() => import('./components/dev/DevPanel'));
 
 function AppInner() {
   const { t } = useTranslation();
@@ -41,6 +43,9 @@ function AppInner() {
         project={selectedProject}
         onClose={() => setSelectedProject(null)}
       />
+      <Suspense fallback={null}>
+        <DevPanel />
+      </Suspense>
     </div>
   );
 }
@@ -48,7 +53,9 @@ function AppInner() {
 function App() {
   return (
     <LanguageProvider>
-      <AppInner />
+      <DevModeProvider>
+        <AppInner />
+      </DevModeProvider>
     </LanguageProvider>
   );
 }
