@@ -4,6 +4,7 @@ import { lazy, Suspense } from 'react';
 import type { Project } from '../lib/types';
 import { CATEGORY_ACCENT } from '../lib/constants';
 import { parseMarkdown } from '../lib/textUtils';
+import type { InlineSegment } from '../lib/textUtils';
 import { useTranslation } from '../hooks/useTranslation';
 
 const MermaidChart = lazy(() => import('./MermaidChart'));
@@ -11,6 +12,30 @@ const MermaidChart = lazy(() => import('./MermaidChart'));
 interface Props {
   project: Project | null;
   onClose: () => void;
+}
+
+function RichText({ segments }: { segments: InlineSegment[] }) {
+  return (
+    <>
+      {segments.map((seg, i) => {
+        if (seg.kind === 'bold') {
+          return (
+            <strong key={i} className="font-bold text-[#1A1A1A]">
+              {seg.value}
+            </strong>
+          );
+        }
+        if (seg.kind === 'code') {
+          return (
+            <code key={i} className="px-1.5 py-0.5 bg-[#1A1A1A]/8 border border-[#1A1A1A]/20 font-mono text-[11px] text-[#FF6B35] rounded-sm">
+              {seg.value}
+            </code>
+          );
+        }
+        return <span key={i}>{seg.value}</span>;
+      })}
+    </>
+  );
 }
 
 export default function ProjectModal({ project, onClose }: Props) {
@@ -89,31 +114,60 @@ export default function ProjectModal({ project, onClose }: Props) {
 
               {(() => {
                 const longDesc = (locale === 'zh' && project.translations?.zh?.long_description) || project.long_description;
-                return longDesc ? (
-                  <div className="mb-10">
-                    {parseMarkdown(longDesc).map((node, i) => {
-                      if (node.type === 'heading') {
-                        return (
-                          <h3 key={i} className="font-mono font-black text-xl text-[#1A1A1A] mt-6 mb-2 border-b-2 border-[#1A1A1A] pb-1">
-                            {node.text}
-                          </h3>
-                        );
-                      }
-                      if (node.type === 'bullet') {
-                        return (
-                          <p key={i} className="font-sans text-[#1A1A1A]/80 text-sm leading-relaxed pl-4 before:content-['→'] before:mr-2 before:text-[#FF6B35]">
-                            {node.text}
-                          </p>
-                        );
-                      }
-                      return (
-                        <p key={i} className="font-sans text-[#1A1A1A]/80 text-sm leading-relaxed">
-                          {node.text}
-                        </p>
-                      );
-                    })}
+                if (!longDesc) return null;
+
+                const nodes = parseMarkdown(longDesc);
+
+                const grouped: Array<{ heading?: string; headingLevel?: 2 | 3; body: typeof nodes }> = [];
+                let current: (typeof grouped)[0] = { body: [] };
+
+                for (const node of nodes) {
+                  if (node.type === 'heading') {
+                    if (current.body.length > 0 || current.heading) {
+                      grouped.push(current);
+                    }
+                    current = { heading: node.text, headingLevel: node.level, body: [] };
+                  } else {
+                    current.body.push(node);
+                  }
+                }
+                if (current.body.length > 0 || current.heading) grouped.push(current);
+
+                return (
+                  <div className="mb-10 space-y-6">
+                    {grouped.map((section, si) => (
+                      <div key={si}>
+                        {section.heading && (
+                          <div className="flex items-center gap-3 mb-3">
+                            <span className="w-1 h-5 bg-[#FF6B35] flex-shrink-0" />
+                            <h3 className={`font-mono font-black text-[#1A1A1A] ${section.headingLevel === 3 ? 'text-base' : 'text-lg'}`}>
+                              {section.heading}
+                            </h3>
+                          </div>
+                        )}
+                        <div className="space-y-2 pl-4">
+                          {section.body.map((node, ni) => {
+                            if (node.type === 'bullet') {
+                              return (
+                                <div key={ni} className="flex gap-2.5 items-start">
+                                  <span className="mt-[5px] w-1.5 h-1.5 rounded-full bg-[#FF6B35] flex-shrink-0" />
+                                  <p className="font-sans text-sm text-[#1A1A1A]/75 leading-relaxed">
+                                    <RichText segments={node.segments} />
+                                  </p>
+                                </div>
+                              );
+                            }
+                            return (
+                              <p key={ni} className="font-sans text-sm text-[#1A1A1A]/75 leading-relaxed">
+                                <RichText segments={node.segments} />
+                              </p>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ) : null;
+                );
               })()}
 
               {project.logic_map?.definition && (
