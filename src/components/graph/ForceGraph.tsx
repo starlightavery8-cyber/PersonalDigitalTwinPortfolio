@@ -39,11 +39,6 @@ export default function ForceGraph({
     (node: SimNode): number => {
       if (activeGroup && node.group !== activeGroup) return 0.15;
       if (selectedNode) {
-        const connected = data.links.some(
-          (l) => l.source === node.id || l.target === node.id ||
-                 (l.source as GraphNode)?.id === node.id ||
-                 (l.target as GraphNode)?.id === node.id
-        );
         if (selectedNode.id === node.id) return 1;
         const isNeighbor = data.links.some((l) => {
           const src = typeof l.source === 'object' ? (l.source as GraphNode).id : l.source;
@@ -59,9 +54,11 @@ export default function ForceGraph({
   );
 
   const getLinkOpacity = useCallback(
-    (link: SimLink): number => {
-      const src = typeof link.source === 'object' ? (link.source as SimNode).id : link.source;
-      const tgt = typeof link.target === 'object' ? (link.target as SimNode).id : link.target;
+    (link: SimLink | undefined): number => {
+      if (!link) return 0;
+      const src = typeof link.source === 'object' ? (link.source as SimNode).id : (link.source as string);
+      const tgt = typeof link.target === 'object' ? (link.target as SimNode).id : (link.target as string);
+      if (!src || !tgt) return 0;
       if (activeGroup) {
         const srcNode = data.nodes.find((n) => n.id === src);
         const tgtNode = data.nodes.find((n) => n.id === tgt);
@@ -93,44 +90,20 @@ export default function ForceGraph({
 
     const defs = svg.append('defs');
 
-    defs
-      .append('marker')
-      .attr('id', 'arrow-usage')
-      .attr('viewBox', '0 -4 8 8')
-      .attr('refX', 8)
-      .attr('refY', 0)
-      .attr('markerWidth', 6)
-      .attr('markerHeight', 6)
-      .attr('orient', 'auto')
-      .append('path')
-      .attr('d', 'M0,-4L8,0L0,4')
-      .attr('fill', LINK_COLOR.usage);
-
-    defs
-      .append('marker')
-      .attr('id', 'arrow-dependency')
-      .attr('viewBox', '0 -4 8 8')
-      .attr('refX', 8)
-      .attr('refY', 0)
-      .attr('markerWidth', 6)
-      .attr('markerHeight', 6)
-      .attr('orient', 'auto')
-      .append('path')
-      .attr('d', 'M0,-4L8,0L0,4')
-      .attr('fill', LINK_COLOR.dependency);
-
-    defs
-      .append('marker')
-      .attr('id', 'arrow-applies')
-      .attr('viewBox', '0 -4 8 8')
-      .attr('refX', 8)
-      .attr('refY', 0)
-      .attr('markerWidth', 6)
-      .attr('markerHeight', 6)
-      .attr('orient', 'auto')
-      .append('path')
-      .attr('d', 'M0,-4L8,0L0,4')
-      .attr('fill', LINK_COLOR.applies);
+    (['usage', 'dependency', 'applies'] as const).forEach((type) => {
+      defs
+        .append('marker')
+        .attr('id', `arrow-${type}`)
+        .attr('viewBox', '0 -4 8 8')
+        .attr('refX', 8)
+        .attr('refY', 0)
+        .attr('markerWidth', 6)
+        .attr('markerHeight', 6)
+        .attr('orient', 'auto')
+        .append('path')
+        .attr('d', 'M0,-4L8,0L0,4')
+        .attr('fill', LINK_COLOR[type]);
+    });
 
     const g = svg.append('g');
 
@@ -157,8 +130,8 @@ export default function ForceGraph({
           .forceLink<SimNode, SimLink>(simLinks)
           .id((d) => d.id)
           .distance((l) => {
-            const src = l.source as SimNode;
             const tgt = l.target as SimNode;
+            const src = l.source as SimNode;
             if (tgt.group === 'project') return 130;
             if (src.group === 'core') return 100;
             return 90;
@@ -176,10 +149,11 @@ export default function ForceGraph({
     const linkGroup = g.append('g').attr('class', 'links');
 
     const linkEl = linkGroup
-      .selectAll<SVGPathElement, SimLink>('path')
+      .selectAll<SVGPathElement, SimLink>('path.link-path')
       .data(simLinks)
       .enter()
       .append('path')
+      .attr('class', 'link-path')
       .attr('fill', 'none')
       .attr('stroke', (d) => LINK_COLOR[d.type] ?? LINK_COLOR.dependency)
       .attr('stroke-width', (d) => (d.type === 'usage' ? 1.5 : 1))
@@ -190,7 +164,7 @@ export default function ForceGraph({
     const nodeGroup = g.append('g').attr('class', 'nodes');
 
     const nodeEl = nodeGroup
-      .selectAll<SVGGElement, SimNode>('g')
+      .selectAll<SVGGElement, SimNode>('g.node')
       .data(simNodes)
       .enter()
       .append('g')
@@ -254,12 +228,12 @@ export default function ForceGraph({
       .text((d) => {
         const label = locale === 'zh' ? d.labelZh : d.label;
         const maxLen = d.group === 'project' ? 12 : 10;
-        return label.length > maxLen ? label.slice(0, maxLen) + '…' : label;
+        return label.length > maxLen ? label.slice(0, maxLen) + '\u2026' : label;
       })
       .attr('text-anchor', 'middle')
       .attr('dominant-baseline', 'central')
       .attr('font-family', 'JetBrains Mono, monospace')
-      .attr('font-size', (d) => (d.level === 1 ? '9px' : d.group === 'project' ? '8px' : '8px'))
+      .attr('font-size', '8px')
       .attr('font-weight', 'bold')
       .attr('fill', (d) => GROUP_COLORS[d.group].text)
       .style('pointer-events', 'none')
@@ -267,13 +241,8 @@ export default function ForceGraph({
 
     nodeEl
       .on('mouseenter', function (event, d) {
-        const svgRect = svgRef.current!.getBoundingClientRect();
         const containerRect = containerRef.current!.getBoundingClientRect();
-        onNodeHover(
-          d,
-          event.clientX - containerRect.left,
-          event.clientY - containerRect.top
-        );
+        onNodeHover(d, event.clientX - containerRect.left, event.clientY - containerRect.top);
         d3.select(this)
           .select('circle, rect, polygon')
           .transition()
@@ -298,14 +267,15 @@ export default function ForceGraph({
       linkEl.attr('d', (d) => {
         const src = d.source as SimNode;
         const tgt = d.target as SimNode;
-        const dx = tgt.x! - src.x!;
+        if (src.x == null || tgt.x == null) return '';
+        const dx = tgt.x - src.x;
         const dy = tgt.y! - src.y!;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
         const srcR = (NODE_RADIUS[src.level] ?? 18) + 2;
         const tgtR = (NODE_RADIUS[tgt.level] ?? 18) + 8;
-        const x1 = src.x! + (dx / dist) * srcR;
+        const x1 = src.x + (dx / dist) * srcR;
         const y1 = src.y! + (dy / dist) * srcR;
-        const x2 = tgt.x! - (dx / dist) * tgtR;
+        const x2 = tgt.x - (dx / dist) * tgtR;
         const y2 = tgt.y! - (dy / dist) * tgtR;
         const mx = (x1 + x2) / 2;
         const my = (y1 + y2) / 2 - dist * 0.05;
@@ -318,17 +288,14 @@ export default function ForceGraph({
     return () => {
       simulation.stop();
     };
-  }, [data, locale]);
+  }, [data, locale, onNodeHover, onNodeClick]);
 
   useEffect(() => {
     if (!svgRef.current) return;
     const svg = d3.select(svgRef.current);
 
-    svg.selectAll<SVGGElement, SimNode>('.node').each(function (d) {
-      d3.select(this).attr('opacity', getNodeOpacity(d));
-    });
-
-    svg.selectAll<SVGPathElement, SimLink>('path').attr('opacity', (d) => getLinkOpacity(d));
+    svg.selectAll<SVGGElement, SimNode>('g.node').attr('opacity', (d) => getNodeOpacity(d));
+    svg.selectAll<SVGPathElement, SimLink>('path.link-path').attr('opacity', (d) => getLinkOpacity(d));
   }, [activeGroup, selectedNode, getNodeOpacity, getLinkOpacity]);
 
   return (
