@@ -13,7 +13,7 @@ import Footer from './components/Footer';
 import FloatingChat from './components/FloatingChat';
 import type { Project } from './lib/types';
 
-const SkillsSection = lazy(() => import('./components/SkillsSection'));
+const SkillGraphSection = lazy(() => import('./components/graph/SkillGraphSection'));
 const DevPanel = lazy(() => import('./components/dev/DevPanel'));
 
 function AppInner() {
@@ -33,7 +33,7 @@ function AppInner() {
             {t('hero.loadingStack')}
           </div>
         }>
-          <SkillsSection />
+          <SkillGraphSection />
         </Suspense>
         <ContactForm />
       </main>

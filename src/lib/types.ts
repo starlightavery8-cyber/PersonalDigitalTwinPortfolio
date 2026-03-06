@@ -62,6 +62,35 @@ export interface Skill {
   created_at: string;
 }
 
+export type GraphNodeGroup =
+  | 'core'
+  | 'skill_arch'
+  | 'skill_ai'
+  | 'skill_hard'
+  | 'skill_pm'
+  | 'project';
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  labelZh: string;
+  group: GraphNodeGroup;
+  level: number;
+  description?: string;
+  descriptionZh?: string;
+}
+
+export interface GraphLink {
+  source: string;
+  target: string;
+  type: 'dependency' | 'usage' | 'applies';
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  links: GraphLink[];
+}
+
 export interface Contact {
   id?: string;
   name: string;

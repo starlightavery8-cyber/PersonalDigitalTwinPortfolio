@@ -98,7 +98,7 @@ export const translations: Record<Locale, Record<string, unknown>> = {
     },
     skills: {
       sectionBadge: 'CAPABILITIES',
-      sectionTitle: 'Stack & Method.',
+      sectionTitle: 'Skill Graph.',
       build: 'BUILD',
       think: 'THINK',
       connect: 'CONNECT',
@@ -106,6 +106,7 @@ export const translations: Record<Locale, Record<string, unknown>> = {
       githubActivity: 'GitHub Activity',
       githubNote: 'Calendar reflects public contribution data from GitHub.',
       githubContributions: '{{count}} contributions in the last year',
+      graphLabel: '// SKILL_GRAPH.render()',
     },
     contact: {
       sectionBadge: "LET'S TALK",
@@ -246,7 +247,7 @@ export const translations: Record<Locale, Record<string, unknown>> = {
     },
     skills: {
       sectionBadge: '核心能力',
-      sectionTitle: '技能栈与方法论。',
+      sectionTitle: '技能图谱。',
       build: '构建',
       think: '思考',
       connect: '连接',
@@ -254,6 +255,7 @@ export const translations: Record<Locale, Record<string, unknown>> = {
       githubActivity: 'GitHub 动态',
       githubNote: '日历展示来自GitHub的公开贡献数据。',
       githubContributions: '过去一年 {{count}} 次贡献',
+      graphLabel: '// 技能图谱.渲染()',
     },
     contact: {
       sectionBadge: '联系我',
