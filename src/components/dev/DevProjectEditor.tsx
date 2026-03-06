@@ -141,8 +141,8 @@ export default function DevProjectEditor() {
   useEffect(() => { load(); }, []);
 
   const handleSave = async (p: Project) => {
-    const { id, created_at, ...rest } = p;
-    await supabase.from('projects').update(rest).eq('id', id);
+    const { id, created_at: _c, ...rest } = p;
+    await supabase.from('projects').update(rest as never).eq('id', id);
     await load();
   };
 
@@ -154,9 +154,9 @@ export default function DevProjectEditor() {
 
   const handleNew = async () => {
     const maxOrder = Math.max(...projects.map(p => p.sort_order), 0) + 1;
-    await supabase.from('projects').insert({
+    const newProject = {
       title: 'New Project',
-      category: 'AI Agents',
+      category: 'AI Agents' as const,
       description: '',
       long_description: '',
       logic_map: null,
@@ -166,7 +166,8 @@ export default function DevProjectEditor() {
       is_featured: false,
       sort_order: maxOrder,
       translations: null,
-    });
+    };
+    await supabase.from('projects').insert(newProject as never);
     await load();
   };
 

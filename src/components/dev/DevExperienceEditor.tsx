@@ -151,8 +151,8 @@ export default function DevExperienceEditor() {
   useEffect(() => { load(); }, []);
 
   const handleSave = async (e: Experience) => {
-    const { id, created_at, ...rest } = e;
-    await supabase.from('experience').update(rest).eq('id', id);
+    const { id, created_at: _c, ...rest } = e;
+    await supabase.from('experience').update(rest as never).eq('id', id);
     await load();
   };
 
@@ -163,7 +163,7 @@ export default function DevExperienceEditor() {
   };
 
   const handleNew = async () => {
-    await supabase.from('experience').insert({
+    const newExp = {
       company: 'New Company',
       role: 'New Role',
       achievements: '',
@@ -171,10 +171,11 @@ export default function DevExperienceEditor() {
       year_start: new Date().getFullYear(),
       year_end: null,
       location: '',
-      category: 'AI_Tech',
+      category: 'AI_Tech' as const,
       is_milestone: false,
       translations: null,
-    });
+    };
+    await supabase.from('experience').insert(newExp as never);
     await load();
   };
 

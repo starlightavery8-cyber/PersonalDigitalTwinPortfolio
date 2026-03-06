@@ -3,7 +3,6 @@ import { Plus, Trash2, Save } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import type { Skill } from '../../lib/types';
 
-const inputCls = "w-full px-3 py-2 font-mono text-xs bg-white border border-[#1A1A1A]/20 focus:outline-none focus:border-[#FF6B35] text-[#1A1A1A]";
 
 function SkillRow({ skill, onSave, onDelete }: {
   skill: Skill;
@@ -105,8 +104,8 @@ export default function DevSkillsEditor() {
   useEffect(() => { load(); }, []);
 
   const handleSave = async (s: Skill) => {
-    const { id, created_at, ...rest } = s;
-    await supabase.from('skills').update(rest).eq('id', id);
+    const { id, created_at: _c, ...rest } = s;
+    await supabase.from('skills').update(rest as never).eq('id', id);
     await load();
   };
 
@@ -117,13 +116,14 @@ export default function DevSkillsEditor() {
   };
 
   const handleNew = async () => {
-    await supabase.from('skills').insert({
+    const newSkill = {
       name: 'New Skill',
       level: 50,
-      category: 'Build',
+      category: 'Build' as const,
       icon_slug: 'code',
       translations: null,
-    });
+    };
+    await supabase.from('skills').insert(newSkill as never);
     await load();
   };
 
